@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "583408815077",
+    "project_id": "linghack2-f7610",
+    "storage_bucket": "linghack2-f7610.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:583408815077:android:61510fd003cae97cd2fd0c",
+        "android_client_info": {
+          "package_name": "com.example.linghack2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCS1nOHZHxiFfpXNUCm25HCvq5F-SFpY4Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
