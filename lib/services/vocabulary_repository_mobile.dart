@@ -175,10 +175,22 @@ class VocabularyRepository {
             final newWord = WordEntry.fromFirestore(doc.data(), doc.id);
             await isar.cachedWords.put(newWord);
           }
+          else {
+            // ⚡️ THE FIX: Overwrite local data with Cloud truth
+            final cloudData = doc.data();
+            existing.isRemembered = cloudData['isRemembered'] ?? false;
+            existing.playlistIds = List<String>.from(cloudData['playlistIds'] ?? []);
+            existing.word = cloudData['foreignText'] ?? existing.word;
+            existing.definition = cloudData['englishText'] ?? existing.definition;
+            existing.isSynced = true; // It matches cloud now
+            
+            await isar.cachedWords.put(existing);
+          }
         } catch (e) {
           print("🚨 ERROR PARSING WORD ${doc.id}: $e");
         }
       }
+      
     });
 
     // 3. NEW: Pull Playlists from Cloud
@@ -202,6 +214,14 @@ class VocabularyRepository {
             final newPlaylist = LocalPlaylist.fromFirestore(doc.data(), doc.id);
             await isar.localPlaylists.put(newPlaylist);
           }
+          else {
+          // ⚡️ THE FIX: Sync playlist names and pins
+          final cloudData = doc.data();
+          existing.name = cloudData['name'] ?? existing.name;
+          existing.isPinned = cloudData['isPinned'] ?? false;
+          
+          await isar.localPlaylists.put(existing);
+        }
         } catch (e) {
           print("🚨 ERROR PARSING PLAYLIST ${doc.id}: $e");
         }
@@ -669,6 +689,25 @@ class VocabularyRepository {
           .doc(playlistId)
           .delete();
     }
+    }
+
+    Future<void> deleteUserEverything(String userId) async {
+      // 1. Wipe Cloud
+      final batch = _firestore.batch();
+      final words = await _firestore.collection('users').doc(userId).collection('vocabulary').get();
+      for (var doc in words.docs) batch.delete(doc.reference);
+      
+      final playlists = await _firestore.collection('users').doc(userId).collection('playlists').get();
+      for (var doc in playlists.docs) batch.delete(doc.reference);
+      
+      await batch.commit();
+      await _firestore.collection('users').doc(userId).delete();
+
+      // 2. Wipe Local
+      await isar.writeTxn(() async {
+        await isar.cachedWords.filter().userIdEqualTo(userId).deleteAll();
+        await isar.localPlaylists.filter().languageCodeEqualTo(userId).deleteAll(); // Use appropriate filter
+      });
     }
 
     

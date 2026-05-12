@@ -172,6 +172,11 @@ class PlaybackService {
  Future<void> speak(String text, String lang, LanguageProvider provider) async {
   if (!provider.isSoundOn) return;
 
+  if (text.trim().isEmpty) {
+    print("🛡️ TTS Blocked: Prevented iOS crash from empty string!");
+    return;
+  }
+
   try {
     // 1. Force fetch voices
     List<dynamic> voices = await _tts.getVoices;

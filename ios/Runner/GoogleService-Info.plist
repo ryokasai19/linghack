@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>583408815077-lq1c6fk69k8ni4uod14uq8otr9a5c36f.apps.googleusercontent.com</string>
+	<string>583408815077-f6f4ikcnfemugn9atmehre3e31il6d5k.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.583408815077-lq1c6fk69k8ni4uod14uq8otr9a5c36f</string>
+	<string>com.googleusercontent.apps.583408815077-f6f4ikcnfemugn9atmehre3e31il6d5k</string>
 	<key>API_KEY</key>
 	<string>AIzaSyDmwur3EFoV84vcXd7v4TssMg2gqomd92s</string>
 	<key>GCM_SENDER_ID</key>
@@ -13,7 +13,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.linghack2</string>
+	<string>com.ryokasai.linghack</string>
 	<key>PROJECT_ID</key>
 	<string>linghack2-f7610</string>
 	<key>STORAGE_BUCKET</key>
@@ -29,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:583408815077:ios:46a046cf848ddb3dd2fd0c</string>
+	<string>1:583408815077:ios:abb43ae85ff26311d2fd0c</string>
 </dict>
 </plist>

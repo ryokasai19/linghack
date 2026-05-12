@@ -25,15 +25,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -65,10 +59,31 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDmwur3EFoV84vcXd7v4TssMg2gqomd92s',
+    appId: '1:583408815077:ios:abb43ae85ff26311d2fd0c',
+    messagingSenderId: '583408815077',
+    projectId: 'linghack2-f7610',
+    storageBucket: 'linghack2-f7610.firebasestorage.app',
+    iosClientId: '583408815077-f6f4ikcnfemugn9atmehre3e31il6d5k.apps.googleusercontent.com',
+    iosBundleId: 'com.ryokasai.linghack',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyDmwur3EFoV84vcXd7v4TssMg2gqomd92s',
     appId: '1:583408815077:ios:46a046cf848ddb3dd2fd0c',
     messagingSenderId: '583408815077',
     projectId: 'linghack2-f7610',
     storageBucket: 'linghack2-f7610.firebasestorage.app',
+    iosClientId: '583408815077-lq1c6fk69k8ni4uod14uq8otr9a5c36f.apps.googleusercontent.com',
     iosBundleId: 'com.example.linghack2',
   );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyDrFhCa9qJz_W-0oG4wgkcs1o6E8tE5FKU',
+    appId: '1:583408815077:web:4f5ac8c20fe42027d2fd0c',
+    messagingSenderId: '583408815077',
+    projectId: 'linghack2-f7610',
+    authDomain: 'linghack2-f7610.firebaseapp.com',
+    storageBucket: 'linghack2-f7610.firebasestorage.app',
+  );
+
 }

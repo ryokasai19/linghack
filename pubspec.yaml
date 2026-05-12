@@ -1,7 +1,7 @@
 name: linghack2
 description: A new Flutter project.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+8
 
 environment:
   sdk: '>=3.0.0 <4.0.0' # Wide range to support your setup
@@ -14,7 +14,7 @@ dependencies:
   provider: ^6.1.1
   intl: ^0.19.0
   http: ^1.2.0
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.5.5
   flutter_tts: ^4.2.1
   image_picker: ^1.0.7
   flip_card: ^0.7.0
@@ -31,6 +31,7 @@ dependencies:
   firebase_storage: ^12.2.0
   firebase_remote_config: ^5.0.0
   google_sign_in: ^6.2.1
+  sign_in_with_apple: ^6.1.1
 
   # --- DATABASE (Local) ---
   isar: ^3.1.0+1
@@ -38,10 +39,13 @@ dependencies:
   path_provider: ^2.1.2
   image: ^4.7.2
   connectivity_plus: ^7.1.0
+  crypto: ^3.0.7
+  flutter_native_splash: ^2.4.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
   build_runner: ^2.4.8
   isar_generator: ^3.1.0+1
 
@@ -49,3 +53,14 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon.png"
+
+flutter_native_splash:
+  color: "#f4ead9" # Change to your app's background color (hex code)
+  image: "assets/icon.png" # Update this to your exact image path
+  android: true
+  ios: true

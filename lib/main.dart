@@ -42,53 +42,92 @@ import 'package:intl/intl.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+
+import 'firebase_options.dart';
 
 final userRepo = UserRepository();
-
 void main() async {
+  // 1. Ensure Flutter bindings are initialized first
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  
-  print("🚨 1. Starting Firebase...");
-  if (kIsWeb){
-    // MANUAL CONFIGURATION FOR WEB
-    await Firebase.initializeApp(
-      options: const FirebaseOptions(
-        apiKey: "AIzaSyBgdq8-vFRR7_Y1Ut5-gLvUYKTDiB9jjuI",
-        authDomain: "linghack2-f7610.firebaseapp.com",
-        projectId: "linghack2-f7610",
-        storageBucket: "linghack2-f7610.firebasestorage.app",
-        messagingSenderId: "583408815077",
-        appId: "1:583408815077:web:645fcb426747c076d2fd0c"
+
+  try {
+    // 2. Try to initialize all dependencies
+    await dotenv.load(fileName: ".env");
+    
+    print("🚨 1. Starting Firebase...");
+    if (kIsWeb){
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyBgdq8-vFRR7_Y1Ut5-gLvUYKTDiB9jjuI",
+          authDomain: "linghack2-f7610.firebaseapp.com",
+          projectId: "linghack2-f7610",
+          storageBucket: "linghack2-f7610.firebasestorage.app",
+          messagingSenderId: "583408815077",
+          appId: "1:583408815077:web:645fcb426747c076d2fd0c"
+        ),
+      );
+    } else {
+        await Firebase.initializeApp(
+         options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+    print("✅ 1. Firebase Done!");
+
+    print("🚨 2. Starting Isar...");
+    await vocabRepo.init(); 
+    print("✅ 2. Isar Done!");
+
+    print("🚨 3. Starting User Repo...");
+    await userRepo.initialize();
+    print("✅ 3. User Repo Done!");
+
+    print("🚨 4. Starting Remote Config...");
+    // We add a specific timeout/try-catch here because network calls on launch are risky
+    try {
+      await RemoteConfigService().initialize().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      print("⚠️ Remote Config failed or timed out, but continuing anyway: $e");
+    }
+    print("✅ 4. Remote Config Done!");
+
+    print("🚨 5. RUNNING APP NOW!");
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => LanguageProvider()),
+          ChangeNotifierProvider.value(value: userRepo), 
+        ],
+        child: const MyApp(),
       ),
     );
-  } else {
-    await Firebase.initializeApp();
+
+  } catch (e, stackTrace) {
+    // 6. THE SAFETY NET: If anything fatally crashes, show an error UI instead of a white screen
+    print("🚨 FATAL LAUNCH ERROR: $e");
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          backgroundColor: Colors.white,
+          body: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 60),
+                  const SizedBox(height: 16),
+                  const Text("Launch Error", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  Text(e.toString(), textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
-  print("✅ 1. Firebase Done!");
-
-  print("🚨 2. Starting Isar...");
-  await vocabRepo.init(); 
-  print("✅ 2. Isar Done!");
-
-  print("🚨 3. Starting User Repo...");
-  await userRepo.initialize();
-  print("✅ 3. User Repo Done!");
-
-  print("🚨 4. Starting Remote Config...");
-  await RemoteConfigService().initialize();
-  print("✅ 4. Remote Config Done!");
-
-  print("🚨 5. RUNNING APP NOW!");
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => LanguageProvider()),
-        ChangeNotifierProvider.value(value: userRepo), 
-      ],
-      child: const MyApp(),
-    ),
-  );
 }
 
 
@@ -139,12 +178,75 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<LanguageProvider>();
-      provider.initializeListeners();
+      // provider.initializeListeners();
       
       // FIX: Pass the current language voice code to warmup
       _playbackService.warmUp(provider.currentLanguage.voiceCode); 
     });
   }
+
+
+  void _showReauthDialog(BuildContext context, dynamic userRepo) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Security Verification"),
+      content: const Text(
+          "For your security, you must verify your identity before deleting your account. Please log in again."),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            userRepo.signOut(); // Log them out to force a fresh Apple Sign-In
+          },
+          child: const Text("Log Out & Verify"),
+        ),
+      ],
+    ),
+  );
+}
+
+  void _showAccountDeleteConfirmation(BuildContext context, dynamic userRepo) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Delete Account?"),
+      content: const Text(
+          "This is permanent. All your flashcards and progress will be wiped from the cloud and this device."),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("CANCEL"),
+        ),
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(context); // Close the first dialog
+
+            try {
+              // 1. Delete all flashcard data (Keep this in your LanguageProvider)
+              final provider = context.read<LanguageProvider>();
+              await provider.deleteAccount(); // Make sure this only deletes vocab now!
+
+              // 2. Delete Auth and Firestore profile
+              await userRepo.deleteAccount();
+
+            } catch (e) {
+              // 3. Catch the specific Apple/Firebase security error
+              if (e.toString().contains('requires-recent-login')) {
+                if (context.mounted) {
+                  _showReauthDialog(context, userRepo);
+                }
+              } else {
+                print("General Deletion Error: $e");
+              }
+            }
+          },
+          child: const Text("DELETE", style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+}
 
 
   // 1. Changed to Future<void> and added async
@@ -310,26 +412,27 @@ Future<void> _showPickerOptions(BuildContext context, LanguageProvider provider)
               },
             ),
           // 1. LANGUAGE SWITCHER
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: TextButton.icon(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  shape: const RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(20))),
-                  builder: (context) => const LanguageSelector(),
-                );
-              },
-              icon: const Icon(Icons.language, color: Colors.blueGrey),
-              label: Text(
-                provider.currentLanguage.code.toUpperCase(),
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, color: Colors.blueGrey),
+          if (!_isStudyMode)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: TextButton.icon(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20))),
+                    builder: (context) => const LanguageSelector(),
+                  );
+                },
+                icon: const Icon(Icons.language, color: Colors.blueGrey),
+                label: Text(
+                  provider.currentLanguage.code.toUpperCase(),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                ),
               ),
             ),
-          ),
 
           // 2. USER LOGIN / AVATAR
           Consumer<UserRepository>(
@@ -342,26 +445,46 @@ Future<void> _showPickerOptions(BuildContext context, LanguageProvider provider)
                     offset: const Offset(0, 40),
                     icon: CircleAvatar(
                       radius: 16,
-                      backgroundImage:
-                          NetworkImage(userRepo.user!.photoURL ?? ""),
-                      child: userRepo.user!.photoURL == null
+                      backgroundImage: () {
+                        final photoUrl = userRepo.user?.photoURL;
+                        // Only use NetworkImage if the URL actually starts with http/https
+                        if (photoUrl != null && photoUrl.startsWith('http')) {
+                          return NetworkImage(photoUrl);
+                        }
+                        return null;
+                      }(), // Calling the function immediately
+                      child: (userRepo.user?.photoURL == null || userRepo.user!.photoURL!.isEmpty)
                           ? const Icon(Icons.person, size: 16)
                           : null,
                     ),
                     itemBuilder: (context) => [
                       const PopupMenuItem(
                         value: 'logout',
-                        child: Row(
+                        child: Row( // Row is usually better than Wrap inside menus
                           children: [
                             Icon(Icons.logout, color: Colors.black54),
-                            SizedBox(width: 8),
+                            SizedBox(width: 12),
                             Text("Logout"),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_forever, color: Colors.redAccent),
+                            SizedBox(width: 12),
+                            Text("Delete Account", style: TextStyle(color: Colors.redAccent)),
                           ],
                         ),
                       ),
                     ],
                     onSelected: (value) {
-                      if (value == 'logout') userRepo.signOut();
+                      if (value == 'logout') {
+                        userRepo.signOut();
+                      } else if (value == 'delete') {
+                        _showAccountDeleteConfirmation(context, userRepo);
+                      }
                     },
                   ),
                 );
@@ -374,7 +497,69 @@ Future<void> _showPickerOptions(BuildContext context, LanguageProvider provider)
                     icon: const Icon(Icons.login, color: Colors.blueGrey),
                     tooltip: "Sign In to Save",
                     onPressed: () {
-                      userRepo.signInWithGoogle();
+                      showModalBottomSheet(
+                        context: context,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        ),
+                        builder: (context) => Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text("Sign In",
+                                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 24),
+
+                              // Unified Google Button
+                              // Unified Google Button with White Background
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: Colors.white, // Forces white background
+                                  minimumSize: const Size(double.infinity, 44),
+                                  side: const BorderSide(color: Colors.black, width: 1),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  userRepo.signInWithGoogle();
+                                },
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.g_mobiledata, size: 30, color: Colors.red),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                    "Continue with Google",
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 17, // Apple's default font size for this button
+                                      fontWeight: FontWeight.w600, // Matches the semi-bold look of the Apple button
+                                      letterSpacing: -0.41, // Mimics iOS system font tracking
+                                    ),
+                                  ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // Apple Button
+                              SignInWithAppleButton(
+                                style: SignInWithAppleButtonStyle.whiteOutlined,
+                                onPressed: () async {
+                                  Navigator.pop(context);
+                                  await userRepo.signInWithApple();
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                          ),
+                        ),
+                      );
                     },
                   ),
                 );

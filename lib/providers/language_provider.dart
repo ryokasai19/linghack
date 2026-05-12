@@ -10,23 +10,31 @@ import '../models/local_playlist.dart';
 import '../services/vocabulary_repository_mobile.dart'; 
 import '../widgets/playlist_shelf.dart';
 import 'package:intl/intl.dart';
-
-
-
+import 'package:shared_preferences/shared_preferences.dart';
+import '../main.dart';
 
 class LanguageProvider with ChangeNotifier {
   LanguageProvider() {
-    // This listens for Login/Logout events
-    FirebaseAuth.instance.authStateChanges().listen((user) async {
-      print("👤 Auth Changed: ${user?.uid}"); // Debug print
-      if (user != null) {
-        // THE FIX: Run the migration, which will safely handle duplicates 
-        // and then automatically call syncUser() for us when it's done.
-        await vocabRepo.migrateGuestDataToCloud(user.uid);
-      }
-      
-      // Initialize listeners ONLY after the database is fully merged and safe
-      initializeListeners(); 
+    _loadSavedLanguage();
+    // Move the listener out of the constructor to prevent the Isar race condition
+    _initializeAuthListener(); 
+  }
+
+  void _initializeAuthListener() {
+    // Delay the listener until the app finishes its initial build and Isar is ready
+    Future.microtask(() {
+      FirebaseAuth.instance.authStateChanges().listen((user) async {
+        // Initialize listeners ONLY after the database is fully merged and safe
+        initializeListeners(); 
+        print("👤 Auth Changed: ${user?.uid}"); // Debug print
+        if (user != null) {
+          // THE FIX: Run the migration, which will safely handle duplicates 
+          // and then automatically call syncUser() for us when it's done.
+          await vocabRepo.migrateGuestDataToCloud(user.uid);
+        }
+        
+        
+      });
     });
   }
   String _selectedLanguage = 'hu'; 
@@ -128,6 +136,20 @@ void clearStudyList() {
     code: 'hu', 
     voiceCode: 'hu-HU'
   );
+
+  Future<void> _loadSavedLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Read saved data, default to Hungarian if nothing is found
+    final code = prefs.getString('lang_code') ?? 'hu';
+    final name = prefs.getString('lang_name') ?? 'Hungarian';
+    final voice = prefs.getString('lang_voice') ?? 'hu-HU';
+    
+    _currentLanguage = TargetLanguage(name: name, code: code, voiceCode: voice);
+    
+    // Restart listeners with the loaded language
+    notifyListeners();
+  }
 
   TargetLanguage get currentLanguage => _currentLanguage;
   
@@ -261,10 +283,16 @@ void clearStudyList() {
     notifyListeners();
   } 
 
-  void setLanguage(TargetLanguage lang) {
+  Future<void> setLanguage(TargetLanguage lang) async {
     _currentLanguage = lang;
     initializeListeners();
     notifyListeners();
+
+    // <--- ADD THESE LINES TO SAVE --->
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('lang_code', lang.code);
+    await prefs.setString('lang_name', lang.name);
+    await prefs.setString('lang_voice', lang.voiceCode);
   }
   
   bool isLanguageLocked(String languageCode) {
@@ -419,6 +447,7 @@ Future<void> editWord(int index, WordPair updatedWord) async {
       final firstLang = isForeignFront ? _currentLanguage.voiceCode : "en-US";
       final firstText = isForeignFront ? word.foreignText : word.englishText;
 
+      print("🗣️ Attempting to speak: '$firstText' in language: '$firstLang'");
       await playback.speak(firstText, firstLang, this);
       if (!_isAutoPlayEnabled) return;
 
@@ -486,6 +515,12 @@ Future<void> editWord(int index, WordPair updatedWord) async {
 
     // 1. Listen to Words
     _wordSubscription = vocabRepo.getWordsStream(userId, languageCode: _currentLanguage.code).listen((newWords) {
+      print("📡 STREAM UPDATE: Received ${newWords.length} words."); // <--- ADD THIS
+  
+    // Pick one word to check (e.g., the first one)
+    if (newWords.isNotEmpty) {
+      print("📌 Word: ${newWords.first.foreignText} | isRemembered: ${newWords.first.isRemembered}");
+    }
       _words = newWords; 
       
       // --- BUG 1 FIX: SYNC THE STUDY LIST WITHOUT LOSING SHUFFLE ---
@@ -621,6 +656,16 @@ Future<void> editWord(int index, WordPair updatedWord) async {
       return true; 
     }
     return false;
+  }
+
+  Future<void> deleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final uid = user.uid;
+    await vocabRepo.deleteUserEverything(uid);
+    await user.delete(); // Removes the user from Firebase Auth
+    notifyListeners();
   }
 
   // Call this when the auto-play loop finishes a card

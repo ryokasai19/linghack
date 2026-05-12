@@ -4,6 +4,13 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart'; // Ensure this points to your model file
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
+import '../services/vocabulary_repository_mobile.dart'; // To access vocabRepo
+import 'package:firebase_auth/firebase_auth.dart'; // Ensure this is present
+
 
 class UserRepository extends ChangeNotifier {
   // --- 1. Dependencies ---
@@ -56,6 +63,9 @@ class UserRepository extends ChangeNotifier {
       final User? user = userCred.user;
 
       if (user != null) {
+
+        await vocabRepo.migrateGuestDataToCloud(user.uid);
+
         // 2. CHECK DATABASE: Does this user exist?
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
@@ -81,6 +91,55 @@ class UserRepository extends ChangeNotifier {
     await _auth.signOut();
     print("User Signed Out");
   }
+
+Future<void> signInWithApple() async {
+  try {
+    print("🚨 DEBUG 1: Using Native Firebase Apple Auth...");
+    
+    // This single line triggers the Apple popup, generates the nonce, 
+    // hashes it, AND does the Firebase handoff automatically!
+    final userCredential = await FirebaseAuth.instance.signInWithProvider(AppleAuthProvider());
+    
+    print("✅ DEBUG 2: Firebase Accepted it natively!");
+    
+    final User? user = userCredential.user;
+    if (user != null) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (!userDoc.exists) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'email': user.email,
+          'displayName': user.displayName,
+          'tier': 'free',
+          'createdAt': FieldValue.serverTimestamp(),
+          'platform': 'apple',
+        });
+      }
+    }
+  } catch (e) {
+    print("❌ Apple Login Error: $e");
+  }
+}
+
+Future<void> deleteAccount() async {
+  final user = _auth.currentUser;
+  if (user == null) return;
+
+  try {
+    // 1. Remove their profile from Firestore
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+    
+    // 2. Delete the actual Authentication account
+    await user.delete(); 
+    
+  } on FirebaseAuthException catch (e) {
+    if (e.code == 'requires-recent-login') {
+      // Throw this specific error so the UI knows exactly what happened
+      throw Exception('requires-recent-login');
+    } else {
+      rethrow;
+    }
+  }
+}
 
   // --- 6. Scan Logic (The "Clerk") ---
 

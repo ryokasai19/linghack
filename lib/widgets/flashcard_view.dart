@@ -29,9 +29,20 @@ class _FlashcardViewState extends State<FlashcardView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = context.read<LanguageProvider>();
+      
+      // 1. Tell iOS to wake up the audio engine and WAIT for it to finish
       await _playback.warmUp(provider.currentLanguage.voiceCode);
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) _speakCurrentSide();
+      
+      // A tiny buffer to let iOS audio routing settle
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // 2. THE SAFETY CHECK: Only speak if the screen is still open 
+      // AND the database has actually loaded the first word
+      if (mounted && provider.currentWord != null) {
+        _speakCurrentSide();
+      } else {
+        print("🛡️ TTS Blocked: Tried to speak on load, but no word was ready!");
+      }
     });
   }
 
